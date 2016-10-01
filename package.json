@@ -1,0 +1,33 @@
+{
+  "name": "js-module-dependencies",
+  "version": "0.0.1",
+  "description": "Find dependencies between JavaScript modules in a project",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bagilevi/js-module-dependencies.git"
+  },
+  "keywords": [
+    "javascript",
+    "dependencies",
+    "dependency-graph",
+    "javascript-modules"
+  ],
+  "author": "Levente Bagi",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/bagilevi/js-module-dependencies/issues"
+  },
+  "homepage": "https://github.com/bagilevi/js-module-dependencies#readme",
+  "dependencies": {
+    "babel": "^6.0.0",
+    "babel-core": "^6.0.0",
+    "babel-plugin-transform-react-jsx": "^6.8.0",
+    "babel-preset-es2017": "^6.14.0",
+    "babel-preset-stage-0": "^6.5.0",
+    "walk": "^2.3.9"
+  }
+}
