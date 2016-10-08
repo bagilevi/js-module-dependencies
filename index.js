@@ -60,7 +60,12 @@ function parseCodeForImports(contents) {
     while (match = regex.exec(contents)) {
       code = code.concat(match[0] + "\n");
     }
-    return parseCode(code);
+    try {
+      return parseCode(code);
+    }
+    catch (e) {
+      return null;
+    }
   }
 }
 
@@ -168,7 +173,7 @@ function getModuleDependenciesInProject(projectPath, callback) {
   var walk    = require('walk')
     , fs      = require('fs')
     , path    = require('path')
-    , walker  = walk.walk(projectPath, { followLinks: false })
+    , walker  = walk.walk(projectPath, { followLinks: false, filters: ['node_modules', 'tmp', 'temp'] })
     ;
   var graph = {};
 
