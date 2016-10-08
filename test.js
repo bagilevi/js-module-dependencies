@@ -1,6 +1,6 @@
 var jsModuleDependecies = require('./index.js')
 
 jsModuleDependecies.getModuleDependenciesInProject(
-  '/Users/lev/tmp/react-dnd',
+  '/Users/lev/tmp/dnd-core',
   console.log
 );

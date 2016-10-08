@@ -18,9 +18,22 @@ function getIdentifierName(node, context) {
   }
 }
 
+function isDirectory(path) {
+  try {
+    stats = fs.lstatSync(path);
+    if (stats.isDirectory()) return true;
+    return false;
+  }
+  catch (e) {
+    return false;
+  }
+}
 function convertSourceReference(fileRelPath, filePath, projectPath) {
   if (fileRelPath.substr(0, 2) == './' || fileRelPath.substr(0, 3) == '../') {
     var targetFullPath = path.resolve(path.dirname(filePath), fileRelPath);
+    if (isDirectory(targetFullPath)) {
+      targetFullPath = targetFullPath.concat("/index");
+    }
     return path.relative(projectPath, targetFullPath);
   }
   else {
@@ -28,11 +41,38 @@ function convertSourceReference(fileRelPath, filePath, projectPath) {
   }
 }
 
+function parseCode(contents) {
+  return babel.transform(contents, {
+    presets: ['stage-0'],
+    plugins: ['transform-react-jsx']
+  });
+}
+
+function parseCodeForImports(contents) {
+  try {
+    return parseCode(contents);
+  }
+  catch (e) {
+    // Syntax Error => slice out import statements only
+    var code = "";
+    var regex = /import[^;]+;/g;
+    var match;
+    while (match = regex.exec(contents)) {
+      code = code.concat(match[0] + "\n");
+    }
+    return parseCode(code);
+  }
+}
+
 function getImportsFromFile(filePath, projectPath, callback) {
   fs.readFile(filePath, 'utf8', function(err, contents) {
     if (err) throw err;
 
-    var result = babel.transform(contents, { presets: ['stage-0'], plugins: ['transform-react-jsx'] });
+    var result = parseCodeForImports(contents);
+    if (!result) {
+      callback(null);
+      return
+    }
     var imports = [];
 
     result.ast.program.body.forEach(function(node){
@@ -40,10 +80,18 @@ function getImportsFromFile(filePath, projectPath, callback) {
         var importedElements = [];
         node.specifiers.forEach(function(specifierNode){
           if (specifierNode.type == 'ImportDefaultSpecifier') {
+            // import defaultMember from "module-name";
             importedElements.push('*');
           } else if (specifierNode.type == 'ImportSpecifier') {
+            // import { member } from "module-name";
+            // import { member as alias } from "module-name";
+            // import { member1 , member2 } from "module-name";
+            // import { member1 , member2 as alias2 } from "module-name";
             importedElements.push(getIdentifierName(specifierNode.imported, 'ImportDeclaration specifier'));
-          } else throw('Unhandled specifier type: ' + specifierNode.type);
+          } else if (specifierNode.type == 'ImportNamespaceSpecifier') {
+            // import * as name from "module-name";
+            importedElements.push('*');
+          } else throw('Unhandled specifier type: ' + specifierNode.type + ' in ' + filePath);
         });
         imports.push(
           [
@@ -62,7 +110,7 @@ function getImportsFromFile(filePath, projectPath, callback) {
           if (specifierNode.type == 'ExportSpecifier') {
             identifierName = getIdentifierName(specifierNode.local);
             importedElements.push(identifierName == 'default' ? '*' : identifierName);
-          } else throw('Unhandled specifier type: ' + specifierNode.type);
+          } else throw('Unhandled specifier type: ' + specifierNode.type + ' in ' + filePath);
         });
         imports.push(
           [
@@ -143,6 +191,7 @@ function getModuleDependenciesInProject(projectPath, callback) {
     getImportsFromFile(filePath, projectPath, function(imports) {
       // console.log(imports);
       // console.log();
+      if (!imports) return next();
       graph[fileRef] = imports.map((pair) => pair[1]);
       next();
     });
