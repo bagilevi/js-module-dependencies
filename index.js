@@ -1,5 +1,6 @@
 var babel = require('babel-core');
 var fs = require('fs');
+var path = require('path');
 
 function getStringLiteralValue(node, context) {
   if (node.type == 'StringLiteral') {
@@ -17,11 +18,17 @@ function getIdentifierName(node, context) {
   }
 }
 
-function convertSourceReference(fileRelPath) {
-  return fileRelPath.substr(0, 2) == './' ? fileRelPath.substr(2) : fileRelPath;
+function convertSourceReference(fileRelPath, filePath, projectPath) {
+  if (fileRelPath.substr(0, 2) == './' || fileRelPath.substr(0, 3) == '../') {
+    var targetFullPath = path.resolve(path.dirname(filePath), fileRelPath);
+    return path.relative(projectPath, targetFullPath);
+  }
+  else {
+    return fileRelPath;
+  }
 }
 
-function getImportsFromFile(filePath, callback) {
+function getImportsFromFile(filePath, projectPath, callback) {
   fs.readFile(filePath, 'utf8', function(err, contents) {
     if (err) throw err;
 
@@ -41,7 +48,11 @@ function getImportsFromFile(filePath, callback) {
         imports.push(
           [
             importedElements,
-            convertSourceReference(getStringLiteralValue(node.source, 'ImportDeclaration source'))
+            convertSourceReference(
+              getStringLiteralValue(node.source, 'ImportDeclaration source'),
+              filePath,
+              projectPath
+            )
           ]
         );
       }
@@ -56,13 +67,53 @@ function getImportsFromFile(filePath, callback) {
         imports.push(
           [
             importedElements,
-            convertSourceReference(getStringLiteralValue(node.source, 'ImportDeclaration source'))
+            convertSourceReference(
+              getStringLiteralValue(node.source, 'ImportDeclaration source'),
+              filePath,
+              projectPath
+            )
           ]
         );
       }
     });
     callback(imports);
   });
+}
+
+function fileExistsSync(path) {
+  try {
+    fs.accessSync(path, fs.F_OK);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function getIgnores(path) {
+  var parser = require('gitignore-parser'),
+      fs     = require('fs');
+
+  var gitignore = null;
+  if (fileExistsSync(path + '/.gitignore')) {
+    gitignore = parser.compile(fs.readFileSync(path + '/.gitignore', 'utf8'));
+  }
+  var myignore = parser.compile(`
+    example
+    examples
+    node_modules
+    doc
+    docs
+    site
+  `.trim());
+  var accepts = function(path) {
+    if (gitignore && gitignore.denies(path)) return false;
+    if (myignore.denies(path)) return false;
+    return true;
+  }
+  return {
+    accepts: accepts,
+    denies: function(path) { return !accepts(path); }
+  }
 }
 
 function getModuleDependenciesInProject(projectPath, callback) {
@@ -73,16 +124,23 @@ function getModuleDependenciesInProject(projectPath, callback) {
     ;
   var graph = {};
 
+  var ignores = getIgnores(projectPath);
+
   function fileHandler(root, fileStat, next) {
     var filePath = root + '/' + fileStat.name
     var fileRelPath = filePath.substr(projectPath.length + 1)
     var fileRef = null;
     var ext = path.extname(fileRelPath);
-    if (ext == '.js') {
-      fileRef = fileRelPath.substr(0, fileRelPath.length - ext.length);
-    } else throw `Expected .js extension, got: ${ext}`
+
+    if (ignores.denies(fileRelPath)) {
+      return next();
+    }
+    if (ext != '.js') return next();
+
+    fileRef = fileRelPath.substr(0, fileRelPath.length - ext.length);
+
     // console.log(fileRelPath);
-    getImportsFromFile(filePath, function(imports) {
+    getImportsFromFile(filePath, projectPath, function(imports) {
       // console.log(imports);
       // console.log();
       graph[fileRef] = imports.map((pair) => pair[1]);
