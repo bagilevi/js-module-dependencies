@@ -1,6 +1,6 @@
 {
   "name": "js-module-dependencies",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Find dependencies between JavaScript modules in a project",
   "main": "index.js",
   "scripts": {
